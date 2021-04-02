@@ -48,12 +48,13 @@ if [ $answer = "Y" ] || [ $answer = "y" ]
 then 
     echo -e "\nСинхронизация..."
 else
+    echo "До встречи!"
     exit
 fi
 
 # Определение длины пути до первой папки для нахождения имен файлов
 lengthFirstFolderPath=${#firstFolderPath}
-# Цикл для переноса файлов
+# Цикл для переноса совпадающих файлов
 for fileName in $(find $firstFolderPath*)
 do  
     # Отсечение пути до файла: остается только имя файла
@@ -101,26 +102,14 @@ do
             else continue
             fi
         fi
-    else 
-        # Формирование пути для файлов во второй папке, т.е. путь первой папки, замененный на путь второй
-        pathToSimilarFolders=$secondFolderPath$fileName
-        pathToSimilarFolders=${name%/*}
-        # Проверка наличия файлов в первой папке и наличия сформированного пути во второй папке
-        if [ -f "$firstFolderPath$fileName" ] && [ -d "$pathToSimilarFolders" ]
-        then
-            #Рекурсивное копирование файла из первой папки во вторую
-            cp -R "$firstFolderPath$fileName" "$secondFolderPath$fileName"
-            # Для мета-данных (Можно закомментить)
-            cp -R "$secondFolderPath$fileName"  "$firstFolderPath$fileName"
-        fi
     fi
 done
 
 # Рекурсивное копирование файлов (аргумент "-R") без перезаписи существущих файлов (аргумент "-n")
-# Копирование папок из первой папки во вторую
+# Копирование папок и файлов из первой папки во вторую
 cp -n -R "$firstFolderPath." "$secondFolderPath"
-# Копирование папок из второй папки в первую
+# Копирование папок и файлов из второй папки в первую
 cp -n -R "$secondFolderPath." "$firstFolderPath"
 
-# Вывод сообщения о завершении сингхронизации
+# Вывод сообщения о завершении синхронизации
 echo -e "Cинхронизация проведена!"
