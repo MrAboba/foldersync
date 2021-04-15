@@ -3,6 +3,20 @@
 echo "/**********************************/"
 echo "/*   Скрипт синхронизации папок   /"
 echo "/********************************/"
+echo
+
+echo "Выберите операцию: "
+echo "1) Синхронизация двух папок"
+echo "2) Синхронизация папки и устройства хранения данных"
+read -p "Введите номер операции: " operationType
+
+#Проверка введенного номера операции на корректность
+while [ ! $operationType -eq 1 ] && [ ! $operationType -eq 2 ]
+do
+    echo
+    echo "Некорректный номер операции, повторите попытку!"
+    read -p "Введите номер операции: " operationType
+done
 
 # Опция "-e" добавляет переносы на новую строку при
 # каждом использовании символа перевода строки "\n"
@@ -13,20 +27,101 @@ read firstFolderPath
     # [ ! -d $1 ] проверка отсутствия папки по указанному пути, 
     # где символ "!" означает логическое отрицание,
     # а команда "-d" проверяет директорию на существование
-while [ ! -d $firstFolderPath ]
+while [ ! -d "$firstFolderPath" ]
 do 
     echo " * Путь до первой папки был введен неверно, повторите попытку:"
     read firstFolderPath
 done
+echo
 
-# Аналогично для производится чтение и проверка пути для второй папки
-echo -e "\nВведите путь до второй папки (например: /home/username/secondFolder):"
-read secondFolderPath
-while [ ! -d $secondFolderPath ]
-do 
-    echo " * Путь до второй папки был введен неверно, повторите попытку:"
+if [ $operationType -eq 1 ]
+then
+    # Чтение и проверка пути для второй папки
+    echo "Введите путь до второй папки (например: /home/username/secondFolder):"
     read secondFolderPath
-done
+    while [ ! -d "$secondFolderPath" ]
+    do 
+        echo " * Путь до второй папки был введен неверно, повторите попытку:"
+        read secondFolderPath
+    done
+else
+    # Объявление счетчика номера устройства
+    deviceCounter=1
+    # Объявление массива с путями монтирования устройств
+    declare -a arrayOfMountPaths
+
+    # Цикл просмотра данных об устройстве, в котором
+    # команда "ls /dev/sd*" показывает список всех устройств
+    for device in $(ls /dev/sd*)
+    do  
+        # Вывод подробных данных о подключенных устройствах через "df -h"
+        devInfo=($(df -h "$device"))
+
+        # Объявление переменной для чтения полного пути места монтирования
+        mountPath=${devInfo[12]}
+        # Нахождение полного пути монтирования устройства
+        for (( indexMas = 13; indexMas < ${#devInfo[*]}; indexMas++ ))
+        do
+            mountPath+=" "${devInfo[$indexMas]}
+        done
+
+        # Вывод данных об устройстве
+        echo "$deviceCounter) Устройство: $device"
+        echo "   - Смонтировано в "$mountPath
+        echo "   - Размер: ${devInfo[8]}"
+        echo "   - Использовано: ${devInfo[9]}"
+        echo "   - Свободно: ${devInfo[10]}"
+        echo
+
+        # Замена всех вхождений пробелов в пути монтирования на "\0"
+        # чтобы при считывании массива не было неверного вывода пути
+        mountPath=${mountPath// /"\0"}
+        # Заполнение массива с путями монтирования
+        arrayOfMountPaths+=($mountPath)
+
+        # Увеличение счетчика номера устройства
+        deviceCounter=$(( $deviceCounter+1 ))
+    done
+
+    # Чтение номера устройства и запись в переменную devNum
+    read -p "Введите номер устройства для синхронизации: " devNum
+
+    # Замена всех вхождений "\0" на пробел, чтобы пути для папок,
+    # состоящих из нескольких слов были доступны при выполнении команд
+    deviceMountPath=${arrayOfMountPaths[$devNum-1]//"\0"/" "}
+    echo
+
+    # Считывание ответа пользователя по поводу синхронизации папки, лежащей в устройстве
+    read -p "Будете ли вы проводить синхронизацию с папкой внутри носителя? (Y/N): " syncFolderAnswer
+
+    # Обработка ответа пользователя, если нужно провести синхронизацию папки в устройстве
+    if [ $syncFolderAnswer = "Y" ] || [ $syncFolderAnswer = "y" ]
+    then
+        # Считывание путя до папки определенного устройства
+        echo -e "\nУкажите путь до папки внутри выбранного устройства (например: /FirstFolder)"
+        # Проверка существования указанной директории внутри устройства
+        while true
+        do  
+            read -p "Путь до папки: " deviceFolderPath
+            # Добавление обратного слэша в начале пути до папки, если он отсутствует
+            if [ ! ${deviceFolderPath:0:1} = "/" ]
+            then
+                deviceFolderPath="/"$deviceFolderPath
+            fi
+
+            # Проверка существования пути к указанной папке
+            if [ -d "$deviceMountPath$deviceFolderPath" ]
+            then
+                # Если путь до папки существует, то цикл завершается
+                break
+            else
+                echo
+                echo "Указанной папки не существует, повторите попытку!"
+            fi
+        done
+    fi
+    secondFolderPath=$deviceMountPath$deviceFolderPath
+fi
 
 # Проверка наличия слэша в конце пути до папки и добавление его в случае отсутствия
 # ${firstFolderPath: -1} оставляет только 1 символ с конца значения переменной
@@ -58,7 +153,7 @@ lengthFirstFolderPath=${#firstFolderPath}
 while true
 do
     # Цикл для переноса совпадающих файлов
-    for fileName in $(find $firstFolderPath*)
+    for fileName in $(find "$firstFolderPath")
     do  
         # Отсечение пути до файла: остается только имя файла
         fileName=${fileName:lengthFirstFolderPath}
